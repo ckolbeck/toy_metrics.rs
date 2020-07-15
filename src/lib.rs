@@ -1,11 +1,9 @@
-#[cfg(test)]
 mod metrics {
     use std::sync::atomic::{AtomicI64, Ordering};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::collections::HashMap;
     use std::thread::ThreadId;
-    use std::ops::Deref;
 
 
     pub struct Counter {
@@ -59,5 +57,65 @@ mod metrics {
 
             count
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::metrics::Counter;
+    use std::thread;
+
+    #[test]
+    fn basic_op() {
+        let mut counter = Counter::new();
+        assert_eq!(0, counter.get());
+
+        counter.increment(1);
+        assert_eq!(1, counter.get());
+    }
+
+    #[test]
+    fn cloned_same_thread() {
+        let mut counter = Counter::new();
+        assert_eq!(0, counter.get());
+
+        counter.increment(1);
+
+        let mut counter_2 = counter.clone();
+        counter_2.increment(1);
+
+        let mut counter_3 = counter.clone();
+        counter_3.increment(1);
+
+        assert_eq!(3, counter.get());
+        assert_eq!(3, counter_2.get());
+        assert_eq!(3, counter_3.get());
+    }
+
+    #[test]
+    fn multi_thread() {
+        let mut counter = Counter::new();
+        assert_eq!(0, counter.get());
+
+        let num_threads = 10;
+        let incrs_per_thread = 100;
+        let mut threads = vec![];
+
+        for _ in 0..num_threads {
+            let mut thread_counter = counter.clone();
+            let handle = thread::spawn(move || {
+                for _ in 0..incrs_per_thread {
+                    thread_counter.increment(1);
+                }
+            });
+
+            threads.push(handle);
+        }
+
+        for handle in threads {
+            handle.join();
+        }
+
+        assert_eq!(num_threads * incrs_per_thread, counter.get())
     }
 }
